@@ -165,3 +165,8 @@ cython_debug/
 English/
 Spanish/
 *.csv
+
+# Other
+results/
+xlm_tweet_classifier
+training_logs*

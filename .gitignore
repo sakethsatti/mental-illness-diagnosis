@@ -168,5 +168,5 @@ Spanish/
 
 # Other
 results/
-xlm_tweet_classifier
-training_logs*
+xlm_tweet_classifier*
+*logs.json

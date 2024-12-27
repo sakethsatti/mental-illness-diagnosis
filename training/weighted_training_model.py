@@ -6,7 +6,7 @@ from transformers import Trainer, TrainingArguments
 from datasets import Dataset
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
-from datetime import datetime
+import json
 import csv
 import os
 import json
@@ -69,7 +69,7 @@ class_weights = {
 # Convert weights to tensor, ensuring order matches label IDs
 class_weights_tensor = torch.FloatTensor([class_weights[i] for i in range(num_classes)])
 print("\nClass distribution:")
-print(label_counts)
+print(label_counts) 
 print(f"\nClass weights: {class_weights}")
 
 # Initialize tokenizer and model with correct number of classes
@@ -89,7 +89,7 @@ def tokenize_function(examples):
         examples['text'],
         padding='max_length',
         truncation=True,
-        max_length=64
+        max_length=128
     )
     # Remove return_tensors="pt" as it causes issues with the dataset mapping
     return tokenized
@@ -108,7 +108,7 @@ training_args = TrainingArguments(
     num_train_epochs=5,
     per_device_train_batch_size=16,
     per_device_eval_batch_size=16,
-    warmup_steps=500,
+    warmup_steps=100,
     weight_decay=0.01,
     logging_dir='./logs',
     logging_steps=10,
@@ -118,7 +118,6 @@ training_args = TrainingArguments(
     metric_for_best_model="f1",
     no_cuda=False,
     fp16=True,
-    gradient_accumulation_steps=1
 )
 
 # Custom trainer class with weighted loss
@@ -186,8 +185,7 @@ trainer.train()
 
 # Save training logs
 print("Saving training logs...")
-import json
-with open(f'training_logs_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json', 'w') as f:
+with open(f'weighted_training_logs.json', 'w') as f:
     json.dump(trainer.state.log_history, f, indent=2)
 
 # Save the model

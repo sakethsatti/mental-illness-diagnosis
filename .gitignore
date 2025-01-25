@@ -167,6 +167,6 @@ Spanish/
 *.csv
 
 # Other
+final*/
+detailed_logs/
 results/
-xlm_tweet_classifier*
-*logs.json

@@ -14,6 +14,12 @@ from sklearn.metrics import confusion_matrix
 import seaborn as sns
 import matplotlib.pyplot as plt
 
+FRAC_DATASET = 0.005
+RS = 58 # Random STate
+MAX_LENGTH = 128
+BATCH_SIZE = 16
+
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
@@ -24,7 +30,7 @@ if device.type == "cuda":
 print("Reading Dataset...")
 # Read the dataset file
 csv_file_path = '../cleaned_tweets.csv'
-df = pd.read_csv(csv_file_path).sample(frac=0.005, random_state=58)
+df = pd.read_csv(csv_file_path).sample(frac=FRAC_DATASET, random_state=RS)
 df.columns = ['text', 'label', 'lang']
 
 # Convert to binary classification
@@ -51,14 +57,14 @@ min_class_count = df['label'].value_counts().min()
 # Balance the dataset by downsampling each class to the minimum count
 balanced_dfs = []
 for label in df['label'].unique():
-    class_df = df[df['label'] == label].sample(n=min_class_count, random_state=58)
+    class_df = df[df['label'] == label].sample(n=min_class_count, random_state=RS)
     balanced_dfs.append(class_df)
 
 # Combine all balanced classes
 df = pd.concat(balanced_dfs, ignore_index=True)
 
 # Shuffle the final dataset
-df = df.sample(frac=1, random_state=58).reset_index(drop=True)
+df = df.sample(frac=1, random_state=RS).reset_index(drop=True)
 
 # Add more detailed statistics after balancing
 print("\nDetailed statistics after balancing:")
@@ -98,7 +104,7 @@ df.columns = ['text', 'label', 'lang']
 print("\nClass distribution by language:")
 print(pd.crosstab(df['label'], df['lang']))
 
-train_df, test_df = train_test_split(df, test_size=0.2, random_state=58, stratify=df['label'])
+train_df, test_df = train_test_split(df, test_size=0.2, random_state=RS, stratify=df['label'])
 
 print("Converting DataFrames to Hugging Face Datasets...")
 train_dataset = Dataset.from_pandas(train_df)
@@ -119,9 +125,9 @@ def tokenize_function(examples):
         examples['text'],
         padding='max_length',
         truncation=True,
-        max_length=128
+        max_length=MAX_LENGTH
     )
-
+    
 print("Tokenizing datasets...")
 # Tokenize the datasets
 tokenized_train = train_dataset.map(tokenize_function, batched=True)
@@ -191,8 +197,8 @@ print("Setting up training arguments...")
 training_args = TrainingArguments(
     output_dir='./results',
     num_train_epochs=3,
-    per_device_train_batch_size=16,
-    per_device_eval_batch_size=16,
+    per_device_train_batch_size=BATCH_SIZE,
+    per_device_eval_batch_size=BATCH_SIZE,
     warmup_steps=500,
     weight_decay=0.01,
     logging_dir='./logs',

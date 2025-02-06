@@ -166,7 +166,10 @@ English/
 Spanish/
 *.csv
 
-# Other
-final*/
+
+
+# Results
+*final*/
 detailed_logs/
-results/
+*_results/
+*.png

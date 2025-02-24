@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Parameters
-MODEL_NAME = "MilaNLProc/xlm-emo-t"
+MODEL_NAME = "cardiffnlp/twitter-xlm-roberta-base"
 BATCH_SIZE = 16
 MAX_LENGTH = 128
 EPOCHS = 3
@@ -34,7 +34,7 @@ test_dataset = Dataset.from_pandas(test_df)
 # Load BERTweet tokenizer and model
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = AutoModelForSequenceClassification.from_pretrained(
-    MODEL_NAME, num_labels=2, ignore_mismatched_sizes=True
+    MODEL_NAME, num_labels=2
 ).to(device)
 
 
@@ -54,11 +54,11 @@ def compute_metrics(pred):
 
 # Training arguments
 training_args = TrainingArguments(
-    output_dir='./xlm_emo_results',
+    output_dir='./twitter_xlm_results',
     num_train_epochs=EPOCHS,
     per_device_train_batch_size=BATCH_SIZE,
     per_device_eval_batch_size=BATCH_SIZE,
-    evaluation_strategy="epoch",
+    eval_strategy="epoch",
     save_strategy="epoch",
     logging_dir='./logs',
     logging_steps=100,
@@ -78,8 +78,8 @@ trainer = Trainer(
 trainer.train()
 
 # Save model and tokenizer
-model.save_pretrained('./xlm_emo_final_model')
-tokenizer.save_pretrained('./xlm_emo_final_tokenizer')
+model.save_pretrained('./twitter_xlm_final_model')
+tokenizer.save_pretrained('./twitter_xlm_final_tokenizer')
 
 print("Training complete! Model and tokenizer saved.")
 

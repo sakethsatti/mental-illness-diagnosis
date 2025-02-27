@@ -4,13 +4,14 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trai
 from datasets import Dataset
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix, classification_report
+from datasets import load_dataset
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
 
 # Parameters
 MODEL_NAME = "cardiffnlp/twitter-xlm-roberta-base"
-BATCH_SIZE = 32
+BATCH_SIZE = 128
 MAX_LENGTH = 128
 EPOCHS = 5
 FRAC_DATASET = 1
@@ -39,7 +40,8 @@ class_mapping = {
 
 # Map labels to numerical values (ensure all labels are in lowercase)
 df['label'] = df['label'].str.lower().map(class_mapping)
-df = df.dropna(subset=['label'])
+df = df.dropna(subset=['label']).drop_duplicates()
+
 
 # Split into train and test sets with stratification
 train_df, test_df = train_test_split(df, test_size=0.2, random_state=RS, stratify=df['label'])
@@ -51,7 +53,10 @@ test_dataset = Dataset.from_pandas(test_df)
 # Load tokenizer and model with the updated number of labels
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = AutoModelForSequenceClassification.from_pretrained(
-        MODEL_NAME, num_labels=len(class_mapping)
+    MODEL_NAME, 
+    num_labels=len(class_mapping),
+    hidden_dropout_prob=0.3,
+    attention_probs_dropout_prob=0.3
 ).to(device)
 
 def tokenize_function(examples):
@@ -64,17 +69,20 @@ tokenized_test = test_dataset.map(tokenize_function, batched=True)
 def compute_metrics(pred):
     labels = pred.label_ids
     preds = pred.predictions.argmax(-1)
-    precision, recall, f1, _ = precision_recall_fscore_support(labels, preds, average='weighted')
-    acc = accuracy_score(labels, preds)
-    return {'accuracy': acc, 'f1': f1, 'precision': precision, 'recall': recall}
+    report = classification_report(labels, preds, output_dict=True, target_names=class_names)
+    return {
+        'accuracy': report['accuracy'],
+        'macro_f1': report['macro avg']['f1-score'],
+        'weighted_f1': report['weighted avg']['f1-score'],
+        **{f'f1_{name}': report[name]['f1-score'] for name in class_names}
+    }
 
 # Compute class weights based on training data
 label_counts = train_df['label'].value_counts().to_dict()
 total_count = len(train_df)
-num_classes = len(class_mapping)
-weights = [total_count / (num_classes * label_counts[i]) for i in range(num_classes)]
-weights_tensor = torch.tensor(weights).to(device)
-print("Class weights:", weights_tensor)
+class_weights = [total_count / label_counts[i] for i in range(len(class_mapping))]
+weights_tensor = torch.tensor(class_weights, dtype=torch.float32).to(device)
+print("Class weights tensor:", weights_tensor)
 
 class WeightedTrainer(Trainer):
     def __init__(self, *args, **kwargs):
@@ -91,6 +99,12 @@ class WeightedTrainer(Trainer):
         
         return (loss, outputs) if return_outputs else loss
 
+
+steps_per_epoch = len(tokenized_train) // (BATCH_SIZE)
+logging_steps = steps_per_epoch // 20
+
+print(logging_steps)
+
 # Training arguments
 training_args = TrainingArguments(
     report_to="none",
@@ -101,7 +115,9 @@ training_args = TrainingArguments(
     eval_strategy="epoch",
     save_strategy="epoch",
     logging_dir='./logs',
-    logging_steps=10,
+    logging_first_step=True,
+    bf16=True,
+    logging_steps=logging_steps,
     load_best_model_at_end=True,
     metric_for_best_model="f1",
 )
@@ -116,6 +132,16 @@ trainer = WeightedTrainer(
 
 # Train model
 trainer.train()
+
+import json
+
+full_training_log = trainer.state.log_history
+
+try:
+    with open("full_log_history.json", "w") as f:
+        json.dump(full_training_log, f)
+except:
+    pass
 
 # Save model and tokenizer
 model.save_pretrained('./twitter_xlm_final_model')

@@ -24,9 +24,11 @@ print(f"Using device: {device}")
 
 # Load dataset
 df = pd.read_csv('../cleaned_tweets.csv')
-df.columns = ['text', 'label', 'lang']
+df.columns = ['text', 'labels', 'lang']
 
 # Define class mapping for multi-class classification
+class_names = ['control', 'adhd', 'depression', 'anxiety', 'asd', 
+               'bipolar', 'ptsd', 'ocd', 'eating', 'schizophrenia']
 class_mapping = {
     'control': 0,
     'adhd': 1,
@@ -42,7 +44,7 @@ class_mapping = {
 
 # Map labels to numerical values (ensure all labels are in lowercase)
 df['label'] = df['label'].str.lower().map(class_mapping)
-train_df, test_df = train_test_split(df, test_size=0.2, random_state=RS, stratify=df['label'])
+train_df, test_df = train_test_split(df, test_size=0.2, random_state=RS, stratify=df['labels'])
 
 # Convert to Hugging Face Dataset
 train_dataset = Dataset.from_pandas(train_df)
@@ -75,7 +77,7 @@ def compute_metrics(pred):
         **{f'f1_{name}': report[name]['f1-score'] for name in class_names}
     }
 
-# Compute class weights based on training data (normalized version)
+# Compute class weights based on training data
 label_counts = train_df['label'].value_counts().to_dict()
 total_count = len(train_df)
 num_classes = len(class_mapping)
@@ -176,7 +178,6 @@ print("Predictions saved to test_predictions.csv!")
 # Create a confusion matrix and save as an image
 cm = confusion_matrix(true_labels, pred_labels)
 plt.figure(figsize=(8, 6))
-class_names = ['control', 'adhd', 'depression', 'anxiety', 'asd', 'bipolar', 'ptsd', 'ocd', 'eating', 'schizophrenia']
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
             xticklabels=class_names, yticklabels=class_names)
 plt.xlabel("Predicted")

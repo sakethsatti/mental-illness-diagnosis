@@ -14,14 +14,13 @@ MODEL_NAME = "cardiffnlp/twitter-xlm-roberta-base"
 BATCH_SIZE = 128
 MAX_LENGTH = 128
 EPOCHS = 5
-FRAC_DATASET = 1
 RS = 58
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
 # Load dataset
-df = pd.read_csv('../cleaned_tweets.csv').sample(frac=FRAC_DATASET, random_state=RS)
+df = pd.read_csv('../cleaned_tweets.csv')
 df.columns = ['text', 'label', 'lang']
 
 # Define class mapping for multi-class classification

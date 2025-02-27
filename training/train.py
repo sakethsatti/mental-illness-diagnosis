@@ -164,7 +164,6 @@ predictions = trainer.predict(tokenized_test)
 pred_labels = np.argmax(predictions.predictions, axis=1)
 true_labels = predictions.label_ids
 
-# Save predictions to a DataFrame and CSV (optional)
 results_df = pd.DataFrame({
     'text': test_df['text'].values,
     'lang': test_df['lang'].values,
@@ -173,7 +172,7 @@ results_df = pd.DataFrame({
 })
 
 results_df.to_csv('test_predictions.csv', index=False)
-print("Predictions saved to test_predictions.csv!")
+print("Predictions saved to test_predictions.csv.")
 
 # Create a confusion matrix and save as an image
 cm = confusion_matrix(true_labels, pred_labels)

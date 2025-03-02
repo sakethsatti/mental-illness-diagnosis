@@ -2,29 +2,31 @@ import pandas as pd
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments
 from datasets import Dataset
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
 
 # Parameters
-MODEL_NAME = "cardiffnlp/twitter-xlm-roberta-base"
+MODEL_NAME = "Twitter/twhin-bert-base"
 BATCH_SIZE = 256
 MAX_LENGTH = 128
 EPOCHS = 5
-LEARNING_RATE = 3e-5
+LEARNING_RATE = 2e-5
 WARMUP_RATIO = 0.1
-CLASS_WEIGHT_EXPONENT = 1.5
-RS = 58
-
+CLASS_WEIGHT_EXPONENT = 1.0
+RS = 42
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-# Load dataset
-df = pd.read_csv('../cleaned_tweets.csv')
-df.columns = ['text', 'labels', 'lang']
+# Load separate train and test datasets
+train_df = pd.read_csv('./cleaned_tweets_train.csv')
+test_df = pd.read_csv('./cleaned_tweets_test.csv')
+
+# Rename columns to match expected format
+train_df.columns = ['text', 'label', 'lang']
+test_df.columns = ['text', 'label', 'lang']
 
 # Define class mapping for multi-class classification
 class_names = ['control', 'adhd', 'depression', 'anxiety', 'asd', 
@@ -43,8 +45,8 @@ class_mapping = {
 }
 
 # Map labels to numerical values (ensure all labels are in lowercase)
-df['label'] = df['label'].str.lower().map(class_mapping)
-train_df, test_df = train_test_split(df, test_size=0.2, random_state=RS, stratify=df['labels'])
+train_df['label'] = train_df['label'].str.lower().map(class_mapping)
+test_df['label'] = test_df['label'].str.lower().map(class_mapping)
 
 # Convert to Hugging Face Dataset
 train_dataset = Dataset.from_pandas(train_df)
@@ -55,8 +57,8 @@ tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = AutoModelForSequenceClassification.from_pretrained(
     MODEL_NAME, 
     num_labels=len(class_mapping),
-    hidden_dropout_prob=0.3,
-    attention_probs_dropout_prob=0.3
+    hidden_dropout_prob=0.2,
+    attention_probs_dropout_prob=0.2
 ).to(device)
 
 def tokenize_function(examples):

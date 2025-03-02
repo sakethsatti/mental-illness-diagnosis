@@ -2,6 +2,7 @@ import pandas as pd
 import os
 import re
 from concurrent.futures import ProcessPoolExecutor
+from sklearn.model_selection import train_test_split
 
 # Define patterns
 USER_PATTERN = re.compile(r'@\w+')
@@ -111,22 +112,39 @@ initial_data = pd.DataFrame({
     'language': all_data['language'],
 }).dropna().drop_duplicates()
 
-# Balance the classes - make CONTROL the same size as ADHD
-adhd_count = len(initial_data[initial_data['class'] == 'ADHD'])
-control_data = initial_data[initial_data['class'] == 'CONTROL'].sample(n=adhd_count, random_state=42)
-other_data = initial_data[initial_data['class'] != 'CONTROL']
+train_data, test_data = train_test_split(initial_data, test_size=0.2, random_state=42, stratify=initial_data['class'])
 
-# Combine the balanced data
-final_data = pd.concat([other_data, control_data], ignore_index=True)
+# Balance the classes ONLY in the training data - make CONTROL the same size as ADHD
+adhd_count = len(train_data[train_data['class'] == 'ADHD'])
+control_train_data = train_data[train_data['class'] == 'CONTROL'].sample(n=adhd_count, random_state=42)
+other_train_data = train_data[train_data['class'] != 'CONTROL']
 
-# Calculate and print class distribution percentages
-class_counts = final_data['class'].value_counts()
-total_samples = len(final_data)
-print("\nClass distribution after balancing:")
-for class_name, count in class_counts.items():
-    percentage = (count / total_samples) * 100
+# Combine the balanced training data
+final_train_data = pd.concat([other_train_data, control_train_data], ignore_index=True)
+
+# Keep the test data as is (unbalanced)
+final_test_data = test_data
+
+# Calculate and print class distribution percentages for training set
+train_class_counts = final_train_data['class'].value_counts()
+train_total = len(final_train_data)
+print("\nTrain set class distribution after balancing:")
+for class_name, count in train_class_counts.items():
+    percentage = (count / train_total) * 100
     print(f"{class_name}: {count} samples ({percentage:.2f}%)")
 
-print(f"\nTotal samples: {total_samples}")
+print(f"\nTotal train samples: {train_total}")
 
-final_data.to_csv('cleaned_tweets.csv', index=False)
+# Calculate and print class distribution percentages for test set
+test_class_counts = final_test_data['class'].value_counts()
+test_total = len(final_test_data)
+print("\nTest set class distribution (unbalanced):")
+for class_name, count in test_class_counts.items():
+    percentage = (count / test_total) * 100
+    print(f"{class_name}: {count} samples ({percentage:.2f}%)")
+
+print(f"\nTotal test samples: {test_total}")
+
+# Save both datasets to CSV
+final_train_data.to_csv('cleaned_tweets_train.csv', index=False)
+final_test_data.to_csv('cleaned_tweets_test.csv', index=False)

@@ -12,7 +12,7 @@ import argparse
 parser = argparse.ArgumentParser(description='Train mental illness diagnosis model')
 parser.add_argument('--train_fraction', type=float, default=1.0, help='Fraction of training data to use (0.0-1.0)')
 parser.add_argument('--test_fraction', type=float, default=1.0, help='Fraction of test data to use (0.0-1.0)')
-parser.add_argument('--batch_size', type=int, default=256, help='Batch size for training')
+parser.add_argument('--batch_size', type=int, default=128, help='Batch size for training')
 parser.add_argument('--epochs', type=int, default=5, help='Number of training epochs')
 parser.add_argument('--learning_rate', type=float, default=2e-5, help='Learning rate')
 args = parser.parse_args()
@@ -24,7 +24,7 @@ MAX_LENGTH = 128
 EPOCHS = args.epochs
 LEARNING_RATE = args.learning_rate
 WARMUP_RATIO = 0.1
-CLASS_WEIGHT_EXPONENT = 1.0
+CLASS_WEIGHT_EXPONENT = 1
 RS = 42
 TRAIN_FRACTION = args.train_fraction
 TEST_FRACTION = args.test_fraction
@@ -54,19 +54,18 @@ if TEST_FRACTION < 1.0:
     ).reset_index(drop=True)
 
 # Define class mapping for multi-class classification
-class_names = ['control', 'adhd', 'depression', 'anxiety', 'asd', 
+class_names = ['adhd', 'depression', 'anxiety', 'asd',
                'bipolar', 'ptsd', 'ocd', 'eating', 'schizophrenia']
 class_mapping = {
-    'control': 0,
-    'adhd': 1,
-    'depression': 2,
-    'anxiety': 3,
-    'asd': 4,
-    'bipolar': 5,
-    'ptsd': 6,
-    'ocd': 7,
-    'eating': 8,
-    'schizophrenia': 9
+    'adhd': 0,
+    'depression': 1,
+    'anxiety': 2,
+    'asd': 3,
+    'bipolar': 4,
+    'ptsd': 5,
+    'ocd': 6,
+    'eating': 7,
+    'schizophrenia': 8
 }
 
 # Map labels to numerical values (ensure all labels are in lowercase)
@@ -84,10 +83,10 @@ test_dataset = Dataset.from_pandas(test_df)
 # Load tokenizer and model with the updated number of labels
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = AutoModelForSequenceClassification.from_pretrained(
-    MODEL_NAME, 
+    MODEL_NAME,
     num_labels=len(class_mapping),
-    hidden_dropout_prob=0.2,
-    attention_probs_dropout_prob=0.2
+    hidden_dropout_prob=0.3,
+    attention_probs_dropout_prob=0.3
 ).to(device)
 
 def tokenize_function(examples):
@@ -124,10 +123,10 @@ class WeightedTrainer(Trainer):
         labels = inputs.pop("labels")
         outputs = model(**inputs)
         logits = outputs.logits
-        
+
         loss_fct = torch.nn.CrossEntropyLoss(weight=self.weights_tensor)
         loss = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))
-        
+
         return (loss, outputs) if return_outputs else loss
 
 

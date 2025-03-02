@@ -109,50 +109,35 @@ cleaned_tweets = process_tweets(all_data['tweet'])
 initial_data = pd.DataFrame({
     'tweet': cleaned_tweets,
     'class': all_data['class'],
-    'language': all_data['language'],
+'language': all_data['language'],
 }).dropna().drop_duplicates()
 
+# Remove CONTROL class from the dataset entirely
+print(f"\nRemoving CONTROL class from dataset...")
+initial_data = initial_data[initial_data['class'] != 'CONTROL']
+print(f"Dataset size after removing CONTROL: {len(initial_data)} samples")
+
+# Split the data into train and test sets without any balancing
 train_data, test_data = train_test_split(initial_data, test_size=0.2, random_state=42, stratify=initial_data['class'])
 
-# Balance the classes ONLY in the training data - make CONTROL the same size as ADHD
-adhd_count = len(train_data[train_data['class'] == 'ADHD'])
-control_train_data = train_data[train_data['class'] == 'CONTROL'].sample(n=adhd_count, random_state=42)
-other_train_data = train_data[train_data['class'] != 'CONTROL']
-
-# Combine the balanced training data
-final_train_data = pd.concat([other_train_data, control_train_data], ignore_index=True)
-
-# Keep the test data as is (unbalanced)
+# No balancing - use the splits as they are
+final_train_data = train_data
 final_test_data = test_data
 
 # Calculate and print class distribution percentages for training set
 train_class_counts = final_train_data['class'].value_counts()
 train_total = len(final_train_data)
-print("\nTrain set class distribution after balancing:")
+print("\nTrain set class distribution:")
 for class_name, count in train_class_counts.items():
     percentage = (count / train_total) * 100
     print(f"{class_name}: {count} samples ({percentage:.2f}%)")
 
 print(f"\nTotal train samples: {train_total}")
 
-# Adjust test dataset size to be exactly 0.25x the size of the balanced training set (0.2x of the whole dataset)
-target_test_size = int(train_total * 0.25)
-current_test_size = len(final_test_data)
-
-if current_test_size != target_test_size:
-    print(f"\nAdjusting test set size from {current_test_size} to {target_test_size} samples (20% of training set)")
-    # Sample from test data while preserving class distribution
-    final_test_data = final_test_data.groupby('class', group_keys=False).apply(
-        lambda x: x.sample(
-            n=max(1, int(len(x) * target_test_size / current_test_size)), 
-            random_state=42
-        )
-    ).reset_index(drop=True)
-
 # Calculate and print class distribution percentages for test set
 test_class_counts = final_test_data['class'].value_counts()
 test_total = len(final_test_data)
-print("\nTest set class distribution (unbalanced, 20% of training set):")
+print("\nTest set class distribution:")
 for class_name, count in test_class_counts.items():
     percentage = (count / test_total) * 100
     print(f"{class_name}: {count} samples ({percentage:.2f}%)")

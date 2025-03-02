@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser(description='Train mental illness diagnosis mod
 parser.add_argument('--train_fraction', type=float, default=1.0, help='Fraction of training data to use (0.0-1.0)')
 parser.add_argument('--test_fraction', type=float, default=1.0, help='Fraction of test data to use (0.0-1.0)')
 parser.add_argument('--batch_size', type=int, default=128, help='Batch size for training')
-parser.add_argument('--epochs', type=int, default=5, help='Number of training epochs')
+parser.add_argument('--epochs', type=int, default=15, help='Number of training epochs')
 parser.add_argument('--learning_rate', type=float, default=2e-5, help='Learning rate')
 args = parser.parse_args()
 
@@ -85,8 +85,8 @@ tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = AutoModelForSequenceClassification.from_pretrained(
     MODEL_NAME,
     num_labels=len(class_mapping),
-    hidden_dropout_prob=0.3,
-    attention_probs_dropout_prob=0.3
+    hidden_dropout_prob=0.5,
+    attention_probs_dropout_prob=0.5
 ).to(device)
 
 def tokenize_function(examples):
@@ -106,28 +106,6 @@ def compute_metrics(pred):
         'weighted_f1': report['weighted avg']['f1-score'],
         **{f'f1_{name}': report[name]['f1-score'] for name in class_names}
     }
-
-# Compute class weights based on training data
-label_counts = train_df['label'].value_counts().to_dict()
-total_count = len(train_df)
-num_classes = len(class_mapping)
-class_weights = [(total_count / (num_classes * label_counts[i]))**CLASS_WEIGHT_EXPONENT for i in range(num_classes)]
-weights_tensor = torch.tensor(class_weights, dtype=torch.float32).to(device)
-
-class WeightedTrainer(Trainer):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.weights_tensor = weights_tensor
-
-    def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
-        labels = inputs.pop("labels")
-        outputs = model(**inputs)
-        logits = outputs.logits
-
-        loss_fct = torch.nn.CrossEntropyLoss(weight=self.weights_tensor)
-        loss = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))
-
-        return (loss, outputs) if return_outputs else loss
 
 
 steps_per_epoch = len(tokenized_train) // (BATCH_SIZE)
@@ -163,7 +141,7 @@ training_args = TrainingArguments(
     max_grad_norm=1.0,
 )
 
-trainer = WeightedTrainer(
+trainer = Trainer(
     model=model,
     args=training_args,
     train_dataset=tokenized_train,
@@ -173,16 +151,6 @@ trainer = WeightedTrainer(
 
 # Train model
 trainer.train()
-
-import json
-
-full_training_log = trainer.state.log_history
-
-try:
-    with open("full_log_history.json", "w") as f:
-        json.dump(full_training_log, f)
-except:
-    pass
 
 # Save model and tokenizer
 model.save_pretrained('./twitter_xlm_final_model')

@@ -135,10 +135,24 @@ for class_name, count in train_class_counts.items():
 
 print(f"\nTotal train samples: {train_total}")
 
+# Adjust test dataset size to be exactly 0.25x the size of the balanced training set (0.2x of the whole dataset)
+target_test_size = int(train_total * 0.25)
+current_test_size = len(final_test_data)
+
+if current_test_size != target_test_size:
+    print(f"\nAdjusting test set size from {current_test_size} to {target_test_size} samples (20% of training set)")
+    # Sample from test data while preserving class distribution
+    final_test_data = final_test_data.groupby('class', group_keys=False).apply(
+        lambda x: x.sample(
+            n=max(1, int(len(x) * target_test_size / current_test_size)), 
+            random_state=42
+        )
+    ).reset_index(drop=True)
+
 # Calculate and print class distribution percentages for test set
 test_class_counts = final_test_data['class'].value_counts()
 test_total = len(final_test_data)
-print("\nTest set class distribution (unbalanced):")
+print("\nTest set class distribution (unbalanced, 20% of training set):")
 for class_name, count in test_class_counts.items():
     percentage = (count / test_total) * 100
     print(f"{class_name}: {count} samples ({percentage:.2f}%)")

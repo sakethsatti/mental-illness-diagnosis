@@ -6,16 +6,28 @@ from sklearn.metrics import confusion_matrix, classification_report
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
+import argparse
+
+# Add argument parsing for command line control
+parser = argparse.ArgumentParser(description='Train mental illness diagnosis model')
+parser.add_argument('--train_fraction', type=float, default=1.0, help='Fraction of training data to use (0.0-1.0)')
+parser.add_argument('--test_fraction', type=float, default=1.0, help='Fraction of test data to use (0.0-1.0)')
+parser.add_argument('--batch_size', type=int, default=256, help='Batch size for training')
+parser.add_argument('--epochs', type=int, default=5, help='Number of training epochs')
+parser.add_argument('--learning_rate', type=float, default=2e-5, help='Learning rate')
+args = parser.parse_args()
 
 # Parameters
 MODEL_NAME = "Twitter/twhin-bert-base"
-BATCH_SIZE = 256
+BATCH_SIZE = args.batch_size
 MAX_LENGTH = 128
-EPOCHS = 5
-LEARNING_RATE = 2e-5
+EPOCHS = args.epochs
+LEARNING_RATE = args.learning_rate
 WARMUP_RATIO = 0.1
 CLASS_WEIGHT_EXPONENT = 1.0
 RS = 42
+TRAIN_FRACTION = args.train_fraction
+TEST_FRACTION = args.test_fraction
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
@@ -27,6 +39,19 @@ test_df = pd.read_csv('./cleaned_tweets_test.csv')
 # Rename columns to match expected format
 train_df.columns = ['text', 'label', 'lang']
 test_df.columns = ['text', 'label', 'lang']
+
+# Sample fraction of data while maintaining class distribution
+if TRAIN_FRACTION < 1.0:
+    print(f"Using {TRAIN_FRACTION*100:.1f}% of training data")
+    train_df = train_df.groupby('label', group_keys=False).apply(
+        lambda x: x.sample(frac=TRAIN_FRACTION, random_state=RS)
+    ).reset_index(drop=True)
+
+if TEST_FRACTION < 1.0:
+    print(f"Using {TEST_FRACTION*100:.1f}% of test data")
+    test_df = test_df.groupby('label', group_keys=False).apply(
+        lambda x: x.sample(frac=TEST_FRACTION, random_state=RS)
+    ).reset_index(drop=True)
 
 # Define class mapping for multi-class classification
 class_names = ['control', 'adhd', 'depression', 'anxiety', 'asd', 
@@ -47,6 +72,10 @@ class_mapping = {
 # Map labels to numerical values (ensure all labels are in lowercase)
 train_df['label'] = train_df['label'].str.lower().map(class_mapping)
 test_df['label'] = test_df['label'].str.lower().map(class_mapping)
+
+# Print the dataset sizes after sampling
+print(f"Training samples: {len(train_df)}")
+print(f"Testing samples: {len(test_df)}")
 
 # Convert to Hugging Face Dataset
 train_dataset = Dataset.from_pandas(train_df)

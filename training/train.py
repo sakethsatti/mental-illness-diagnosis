@@ -28,13 +28,14 @@ CLASS_WEIGHT_EXPONENT = 0.75
 RS = 42
 TRAIN_FRACTION = args.train_fraction
 TEST_FRACTION = args.test_fraction
+LANGUAGE = "english"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
 # Load separate train and test datasets
-train_df = pd.read_csv('./cleaned_tweets_train.csv')
-test_df = pd.read_csv('./cleaned_tweets_test.csv')
+train_df = pd.read_csv(f'./cleaned_tweets_train_{LANGUAGE}.csv')
+test_df = pd.read_csv(f'./cleaned_tweets_test_{LANGUAGE}.csv')
 
 # Rename columns to match expected format
 train_df.columns = ['text', 'label', 'lang']

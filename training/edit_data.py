@@ -1,8 +1,15 @@
 import pandas as pd
 import os
 import re
+import argparse
 from concurrent.futures import ProcessPoolExecutor
 from sklearn.model_selection import train_test_split
+
+# Add command line argument parsing
+parser = argparse.ArgumentParser(description='Process Twitter data for mental illness classification.')
+parser.add_argument('--language', type=str, choices=['english', 'spanish', 'both'], 
+                    default='both', help='Choose which language data to process (default: both)')
+args = parser.parse_args()
 
 # Define patterns
 USER_PATTERN = re.compile(r'@\w+')
@@ -12,29 +19,38 @@ REPEAT_NON_WORD = re.compile(r'(\W)\1{2,}')
 EXTRA_SPACES = re.compile(r'\s+')
 
 # Define file prefixes in a list
-file_prefixes = [
-    "../English/Adhd_eng/",
-    "../English/Anxiety_eng/",
-    "../English/Asd_eng/",
-    "../English/Bipolar_eng/",
-    "../English/Control_eng/",
-    "../English/Depression_eng/",
-    "../English/Eating_eng/",
-    "../English/Ocd_eng/",
-    "../English/Ptsd_eng/",
-    "../English/Schizophrenia_eng/",
-    "../Spanish/Adhd_esp/",
-    "../Spanish/Anxiety_esp/",
-    "../Spanish/Asd_esp/",
-    "../Spanish/Bipolar_esp/",
-    "../Spanish/Control_esp/",
-    "../Spanish/Depression_esp/",
-    "../Spanish/Eating_esp/",
-    "../Spanish/Ocd_esp/",
-    "../Spanish/Ptsd_esp/",
-    "../Spanish/Schizophrenia_esp/"
-]
+file_prefixes = []
 
+# Add file prefixes based on selected language
+if args.language.lower() in ['english', 'both']:
+    file_prefixes.extend([
+        "../English/Adhd_eng/",
+        "../English/Anxiety_eng/",
+        "../English/Asd_eng/",
+        "../English/Bipolar_eng/",
+        "../English/Control_eng/",
+        "../English/Depression_eng/",
+        "../English/Eating_eng/",
+        "../English/Ocd_eng/",
+        "../English/Ptsd_eng/",
+        "../English/Schizophrenia_eng/"
+    ])
+
+if args.language.lower() in ['spanish', 'both']:
+    file_prefixes.extend([
+        "../Spanish/Adhd_esp/",
+        "../Spanish/Anxiety_esp/",
+        "../Spanish/Asd_esp/",
+        "../Spanish/Bipolar_esp/",
+        "../Spanish/Control_esp/",
+        "../Spanish/Depression_esp/",
+        "../Spanish/Eating_esp/",
+        "../Spanish/Ocd_esp/",
+        "../Spanish/Ptsd_esp/",
+        "../Spanish/Schizophrenia_esp/"
+    ])
+
+print(f"Processing {args.language} data...")
 dataframes = []
 
 # Loop through each prefix and read CSV files
@@ -62,7 +78,6 @@ all_data = pd.concat(dataframes, ignore_index=True)
 
 def clean_tweet(tweet):
     try:
-        # Remove URLs and user mentions
         tweet = USER_PATTERN.sub('', tweet)
         
         # Convert to lowercase
@@ -109,7 +124,7 @@ cleaned_tweets = process_tweets(all_data['tweet'])
 initial_data = pd.DataFrame({
     'tweet': cleaned_tweets,
     'class': all_data['class'],
-'language': all_data['language'],
+    'language': all_data['language'],
 }).dropna().drop_duplicates()
 
 # Remove CONTROL class from the dataset entirely
@@ -127,7 +142,7 @@ final_test_data = test_data
 # Calculate and print class distribution percentages for training set
 train_class_counts = final_train_data['class'].value_counts()
 train_total = len(final_train_data)
-print("\nTrain set class distribution:")
+print(f"\nTrain set class distribution ({args.language}):")
 for class_name, count in train_class_counts.items():
     percentage = (count / train_total) * 100
     print(f"{class_name}: {count} samples ({percentage:.2f}%)")
@@ -137,13 +152,23 @@ print(f"\nTotal train samples: {train_total}")
 # Calculate and print class distribution percentages for test set
 test_class_counts = final_test_data['class'].value_counts()
 test_total = len(final_test_data)
-print("\nTest set class distribution:")
+print(f"\nTest set class distribution ({args.language}):")
 for class_name, count in test_class_counts.items():
     percentage = (count / test_total) * 100
     print(f"{class_name}: {count} samples ({percentage:.2f}%)")
 
 print(f"\nTotal test samples: {test_total}")
 
-# Save both datasets to CSV
-final_train_data.to_csv('cleaned_tweets_train.csv', index=False)
-final_test_data.to_csv('cleaned_tweets_test.csv', index=False)
+# Create language-specific filename suffix
+lang_suffix = ""
+if args.language.lower() == "english":
+    lang_suffix = "_english"
+elif args.language.lower() == "spanish":
+    lang_suffix = "_spanish"
+else:
+    lang_suffix = "_both"
+
+# Save both datasets to CSV with language-specific names
+final_train_data.to_csv(f'cleaned_tweets_train{lang_suffix}.csv', index=False)
+final_test_data.to_csv(f'cleaned_tweets_test{lang_suffix}.csv', index=False)
+print(f"\nSaved datasets with {args.language} data.")

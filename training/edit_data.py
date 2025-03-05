@@ -9,6 +9,8 @@ from sklearn.model_selection import train_test_split
 parser = argparse.ArgumentParser(description='Process Twitter data for mental illness classification.')
 parser.add_argument('--language', type=str, choices=['english', 'spanish', 'both'], 
                     default='both', help='Choose which language data to process (default: both)')
+parser.add_argument('--binary', action='store_true', 
+                    help='Create a binary dataset (mental illness vs control) instead of multi-class')
 args = parser.parse_args()
 
 # Define patterns
@@ -127,13 +129,42 @@ initial_data = pd.DataFrame({
     'language': all_data['language'],
 }).dropna().drop_duplicates()
 
-# Remove CONTROL class from the dataset entirely
-print(f"\nRemoving CONTROL class from dataset...")
-initial_data = initial_data[initial_data['class'] != 'CONTROL']
-print(f"Dataset size after removing CONTROL: {len(initial_data)} samples")
+# If binary classification is requested, convert all non-CONTROL classes to "MENTAL_ILLNESS"
+if args.binary:
+    print("\nCreating binary classification dataset (MENTAL_ILLNESS vs CONTROL)...")
+    initial_data['class'] = initial_data['class'].apply(
+        lambda x: 'CONTROL' if x == 'CONTROL' else 'MENTAL_ILLNESS'
+    )
+    print(f"Classes after binary conversion: {initial_data['class'].unique()}")
+    
+    # Make sure we have a balanced dataset for binary classification
+    control_count = len(initial_data[initial_data['class'] == 'CONTROL'])
+    mental_illness_count = len(initial_data[initial_data['class'] == 'MENTAL_ILLNESS'])
+    print(f"Initial counts - CONTROL: {control_count}, MENTAL_ILLNESS: {mental_illness_count}")
+    
+    # If there are too many mental illness samples compared to control,
+    # sample down the mental illness class
+    if mental_illness_count > control_count * 3:  # arbitrary threshold of 3x
+        print(f"Downsampling MENTAL_ILLNESS class to {control_count * 3} samples")
+        mental_illness_data = initial_data[initial_data['class'] == 'MENTAL_ILLNESS'].sample(
+            n=control_count * 3, random_state=42)
+        control_data = initial_data[initial_data['class'] == 'CONTROL']
+        initial_data = pd.concat([mental_illness_data, control_data])
+        print(f"Data size after downsampling: {len(initial_data)}")
+    
+    filename_suffix = "_binary"
+else:
+    # For multi-class, simply remove CONTROL
+    print(f"\nRemoving CONTROL class from dataset...")
+    initial_data = initial_data[initial_data['class'] != 'CONTROL']
+    print(f"Dataset size after removing CONTROL: {len(initial_data)} samples")
+    filename_suffix = ""
 
 # Split the data into train and test sets without any balancing
-train_data, test_data = train_test_split(initial_data, test_size=0.2, random_state=42, stratify=initial_data['class'])
+train_data, test_data = train_test_split(
+    initial_data, test_size=0.2, random_state=42, 
+    stratify=initial_data['class']
+)
 
 # No balancing - use the splits as they are
 final_train_data = train_data
@@ -168,7 +199,10 @@ elif args.language.lower() == "spanish":
 else:
     lang_suffix = "_both"
 
+# Combine suffixes
+full_suffix = f"{lang_suffix}{filename_suffix}"
+
 # Save both datasets to CSV with language-specific names
-final_train_data.to_csv(f'cleaned_tweets_train{lang_suffix}.csv', index=False)
-final_test_data.to_csv(f'cleaned_tweets_test{lang_suffix}.csv', index=False)
-print(f"\nSaved datasets with {args.language} data.")
+final_train_data.to_csv(f'cleaned_tweets_train{full_suffix}.csv', index=False)
+final_test_data.to_csv(f'cleaned_tweets_test{full_suffix}.csv', index=False)
+print(f"\nSaved datasets with {args.language} data{' (binary classification)' if args.binary else ''}.")

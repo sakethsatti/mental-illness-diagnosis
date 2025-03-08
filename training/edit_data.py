@@ -14,10 +14,9 @@ parser.add_argument('--binary', action='store_true',
 args = parser.parse_args()
 
 # Define patterns
-USER_PATTERN = re.compile(r'@\w+')
-SPECIAL_CHARS = re.compile(r'[^a-zA-Z0-9\sáéíóúüñÁÉÍÓÚÜÑ]') # Include spanish characters
-REPEAT_CHARS = re.compile(r'(\w)\1{2,}')
-REPEAT_NON_WORD = re.compile(r'(\W)\1{2,}')
+# Keeping @ mentions (hence '@' is preserved in the regex)
+SPECIAL_CHARS = re.compile(r'[^@a-zA-Z0-9\sáéíóúüñÁÉÍÓÚÜÑ]')
+REPEAT_PATTERN = re.compile(r'(.)\1{3,}')
 EXTRA_SPACES = re.compile(r'\s+')
 
 # Define file prefixes in a list
@@ -59,8 +58,6 @@ dataframes = []
 for prefix in file_prefixes:
     # Determine the language based on the prefix
     language = 'English' if 'English' in prefix else 'Spanish'
-    
-    # Create full paths and read CSV files into DataFrames
     full_paths = [os.path.join(prefix, file) for file in os.listdir(prefix) if file.endswith('.csv')]
     
     for file in full_paths:
@@ -72,32 +69,28 @@ for prefix in file_prefixes:
         elif (prefix == "../English/Asd_eng/"):
             df["class"] = "ASD"
 
-        df['language'] = language  # Add a new column for the language
-        dataframes.append(df)  # Append the DataFrame to the list
+        df['language'] = language
+        dataframes.append(df) 
 
 # Concatenate all DataFrames into a single DataFrame
 all_data = pd.concat(dataframes, ignore_index=True)
 
 def clean_tweet(tweet):
     try:
-        tweet = USER_PATTERN.sub('', tweet)
-        
-        # Convert to lowercase
-        tweet = tweet.lower()
-        
-        tweet = re.sub('httpurl', '', tweet)
+        # Replace 'httpurl' with 'URL'
+        tweet = re.sub('httpurl', 'URL', tweet, flags=re.IGNORECASE)
 
-        # Remove special characters and repeating characters
+        # Standardize @user mentions
+        tweet = re.sub(r'@(?:user|usuario)', '@USER', tweet, flags=re.IGNORECASE)
+
+        # Remove special characters (keeps @ due to modified regex)
         tweet = SPECIAL_CHARS.sub('', tweet)
-        tweet = REPEAT_CHARS.sub(r'\1', tweet)
-        tweet = REPEAT_NON_WORD.sub(r'\1', tweet)
+        
+        # Limit repetitive character sequences to a maximum of three occurrences
+        tweet = REPEAT_PATTERN.sub(lambda m: m.group(1) * 3, tweet)
         
         # Split into words
         words = tweet.split()
-        
-        # Check if tweet is too short
-        if len(words) < 3:
-            return None
             
         # Join words and clean up spaces
         tweet = EXTRA_SPACES.sub(' ', ' '.join(words)).strip()
@@ -141,16 +134,6 @@ if args.binary:
     control_count = len(initial_data[initial_data['class'] == 'CONTROL'])
     mental_illness_count = len(initial_data[initial_data['class'] == 'MENTAL_ILLNESS'])
     print(f"Initial counts - CONTROL: {control_count}, MENTAL_ILLNESS: {mental_illness_count}")
-    
-    # If there are too many mental illness samples compared to control,
-    # sample down the mental illness class
-    if mental_illness_count > control_count * 3:  # arbitrary threshold of 3x
-        print(f"Downsampling MENTAL_ILLNESS class to {control_count * 3} samples")
-        mental_illness_data = initial_data[initial_data['class'] == 'MENTAL_ILLNESS'].sample(
-            n=control_count * 3, random_state=42)
-        control_data = initial_data[initial_data['class'] == 'CONTROL']
-        initial_data = pd.concat([mental_illness_data, control_data])
-        print(f"Data size after downsampling: {len(initial_data)}")
     
     filename_suffix = "_binary"
 else:

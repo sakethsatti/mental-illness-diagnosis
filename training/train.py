@@ -2,7 +2,8 @@ import pandas as pd
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments
 from datasets import Dataset
-from sklearn.metrics import confusion_matrix, classification_report
+from sklearn.metrics import confusion_matrix, classification_report, roc_curve, auc
+from sklearn.preprocessing import label_binarize
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,18 +14,18 @@ parser = argparse.ArgumentParser(description='Train mental illness diagnosis mod
 parser.add_argument('--train_fraction', type=float, default=1.0, help='Fraction of training data to use (0.0-1.0)')
 parser.add_argument('--test_fraction', type=float, default=1.0, help='Fraction of test data to use (0.0-1.0)')
 parser.add_argument('--batch_size', type=int, default=128, help='Batch size for training')
-parser.add_argument('--epochs', type=int, default=10, help='Number of training epochs')
+parser.add_argument('--epochs', type=int, default=5, help='Number of training epochs')
 parser.add_argument('--learning_rate', type=float, default=2e-5, help='Learning rate')
 args = parser.parse_args()
 
 # Parameters
-MODEL_NAME = "Twitter/twhin-bert-base"
+MODEL_NAME = "cardiffnlp/twitter-xlm-roberta-base"
 BATCH_SIZE = args.batch_size
 MAX_LENGTH = 128
 EPOCHS = args.epochs
 LEARNING_RATE = args.learning_rate
 WARMUP_RATIO = 0.1
-CLASS_WEIGHT_EXPONENT = 0.75
+CLASS_WEIGHT_EXPONENT = 1
 RS = 42
 TRAIN_FRACTION = args.train_fraction
 TEST_FRACTION = args.test_fraction
@@ -86,12 +87,17 @@ tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 model = AutoModelForSequenceClassification.from_pretrained(
     MODEL_NAME,
     num_labels=len(class_mapping),
-    hidden_dropout_prob=0.3,
-    attention_probs_dropout_prob=0.3
+    hidden_dropout_prob=0.2,
+    attention_probs_dropout_prob=0.2
 ).to(device)
 
 def tokenize_function(examples):
-    return tokenizer(examples['text'], padding='max_length', truncation=True, max_length=MAX_LENGTH)
+    return tokenizer(
+        examples['text'],
+        padding='max_length',
+        truncation=True,
+        max_length=64,
+    )
 
 # Tokenize datasets
 tokenized_train = train_dataset.map(tokenize_function, batched=True)
@@ -175,15 +181,6 @@ trainer = WeightedTrainer(
 # Train model
 trainer.train()
 
-import json
-
-full_training_log = trainer.state.log_history
-
-try:
-    with open("full_log_history.json", "w") as f:
-        json.dump(full_training_log, f)
-except:
-    pass
 
 # Save model and tokenizer
 model.save_pretrained('./twitter_xlm_final_model')
@@ -221,3 +218,44 @@ print("Confusion matrix saved as confusion_matrix.png")
 # Print classification report
 print("Classification Report:")
 print(classification_report(true_labels, pred_labels, target_names=class_names))
+
+# Calculate and plot ROC curves and AUC scores
+# Get prediction probabilities
+y_pred_proba = predictions.predictions
+
+# Binarize the labels for one-vs-rest ROC calculation
+y_true_bin = label_binarize(true_labels, classes=range(len(class_names)))
+
+# Calculate ROC curve and AUC for each class
+fpr = dict()
+tpr = dict()
+roc_auc = dict()
+
+plt.figure(figsize=(12, 8))
+for i in range(len(class_names)):
+    fpr[i], tpr[i], _ = roc_curve(y_true_bin[:, i], y_pred_proba[:, i])
+    roc_auc[i] = auc(fpr[i], tpr[i])
+    plt.plot(fpr[i], tpr[i], lw=2,
+             label=f'{class_names[i]} (AUC = {roc_auc[i]:.2f})')
+
+# Plot the random chance line
+plt.plot([0, 1], [0, 1], 'k--', lw=2)
+
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver Operating Characteristic (ROC) Curves')
+plt.legend(loc="lower right")
+plt.grid(True)
+plt.tight_layout()
+plt.savefig("roc_curves.png")
+plt.close()
+print("ROC curves saved as roc_curves.png")
+
+# Calculate and print the macro and weighted average AUC
+macro_roc_auc = sum(roc_auc.values()) / len(roc_auc)
+print("\nAUC-ROC Scores:")
+for i in range(len(class_names)):
+    print(f"{class_names[i]}: {roc_auc[i]:.4f}")
+print(f"Macro Average AUC: {macro_roc_auc:.4f}")

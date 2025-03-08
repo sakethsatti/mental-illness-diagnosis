@@ -29,7 +29,7 @@ CLASS_WEIGHT_EXPONENT = 1
 RS = 42
 TRAIN_FRACTION = args.train_fraction
 TEST_FRACTION = args.test_fraction
-LANGUAGE = "english"
+LANGUAGE = "both"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")

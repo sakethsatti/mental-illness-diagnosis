@@ -15,7 +15,7 @@ parser.add_argument('--test_fraction', type=float, default=1.0, help='Fraction o
 parser.add_argument('--batch_size', type=int, default=128, help='Batch size for training')
 parser.add_argument('--epochs', type=int, default=5, help='Number of training epochs')
 parser.add_argument('--learning_rate', type=float, default=2e-5, help='Learning rate')
-parser.add_argument('--language', type=str, default='english', choices=['english', 'spanish', 'both'],
+parser.add_argument('--language', type=str, default='both', choices=['english', 'spanish', 'both'],
                     help='Language of the dataset to use')
 args = parser.parse_args()
 

@@ -16,22 +16,24 @@ parser.add_argument('--test_fraction', type=float, default=1.0, help='Fraction o
 parser.add_argument('--batch_size', type=int, default=128, help='Batch size for training')
 parser.add_argument('--epochs', type=int, default=5, help='Number of training epochs')
 parser.add_argument('--learning_rate', type=float, default=2e-5, help='Learning rate')
-parser.add_argument('--use_weighted_loss', action='store_true', help='Use weighted loss function based on class distribution')
+parser.add_argument('--use_weighted_loss', default=True, action='store_true', help='Use weighted loss function based on class distribution')
 args = parser.parse_args()
 
 # Parameters
 MODEL_NAME = "cardiffnlp/twitter-xlm-roberta-base"
 BATCH_SIZE = args.batch_size
-MAX_LENGTH = 128
+MAX_LENGTH = 64
 EPOCHS = args.epochs
 LEARNING_RATE = args.learning_rate
 WARMUP_RATIO = 0.1
-CLASS_WEIGHT_EXPONENT = 1
+CLASS_WEIGHT_EXPONENT = 0.20
 RS = 42
 TRAIN_FRACTION = args.train_fraction
 TEST_FRACTION = args.test_fraction
 LANGUAGE = "both"
 USE_WEIGHTED_LOSS = args.use_weighted_loss
+
+print(f"Using Weighted Loss: {USE_WEIGHTED_LOSS}")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
@@ -98,7 +100,7 @@ def tokenize_function(examples):
         examples['text'],
         padding='max_length',
         truncation=True,
-        max_length=64,
+        max_length=MAX_LENGTH,
     )
 
 # Tokenize datasets
@@ -139,7 +141,7 @@ class WeightedTrainer(Trainer):
             loss_fct = torch.nn.CrossEntropyLoss(weight=self.weights_tensor)
         else:
             loss_fct = torch.nn.CrossEntropyLoss()
-            
+
         loss = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))
 
         return (loss, outputs) if return_outputs else loss

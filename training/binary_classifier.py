@@ -2,7 +2,7 @@ import pandas as pd
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments
 from datasets import Dataset
-from sklearn.metrics import confusion_matrix, classification_report
+from sklearn.metrics import confusion_matrix, classification_report, roc_curve, auc
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
@@ -20,9 +20,9 @@ parser.add_argument('--language', type=str, default='english', choices=['english
 args = parser.parse_args()
 
 # Parameters
-MODEL_NAME = "Twitter/twhin-bert-base"
+MODEL_NAME = "cardiffnlp/twitter-xlm-roberta-base"
 BATCH_SIZE = args.batch_size
-MAX_LENGTH = 128
+MAX_LENGTH = 64
 EPOCHS = args.epochs
 LEARNING_RATE = args.learning_rate
 WARMUP_RATIO = 0.1
@@ -101,7 +101,10 @@ model = AutoModelForSequenceClassification.from_pretrained(
 ).to(device)
 
 def tokenize_function(examples):
-    return tokenizer(examples['text'], padding='max_length', truncation=True, max_length=MAX_LENGTH)
+    return tokenizer(examples['text'],
+                     padding='max_length', 
+                     truncation=True,
+                     max_length=MAX_LENGTH)
 
 # Tokenize datasets
 tokenized_train = train_dataset.map(tokenize_function, batched=True)
@@ -172,17 +175,6 @@ trainer = Trainer(
 print("\nStarting training...")
 trainer.train()
 
-import json
-
-# Save training logs
-full_training_log = trainer.state.log_history
-try:
-    with open("binary_training_log.json", "w") as f:
-        json.dump(full_training_log, f)
-    print("Training logs saved to binary_training_log.json")
-except:
-    print("Could not save training logs")
-
 # Save model and tokenizer
 model.save_pretrained('./binary_model_final')
 tokenizer.save_pretrained('./binary_tokenizer_final')
@@ -227,3 +219,26 @@ print("Confusion matrix saved as binary_confusion_matrix.png")
 # Print classification report
 print("\nBinary Classification Report:")
 print(classification_report(true_labels, pred_labels, target_names=class_names))
+# Get prediction probabilities for positive class (mental_illness)
+pred_probs = predictions.predictions[:, 1]
+
+# Calculate ROC curve points and AUC
+fpr, tpr, thresholds = roc_curve(true_labels, pred_probs)
+roc_auc = auc(fpr, tpr)
+
+# Plot ROC curve
+plt.figure(figsize=(8, 6))
+plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (area = {roc_auc:.3f})')
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title(f'ROC Curve for Binary Classification ({LANGUAGE})')
+plt.legend(loc="lower right")
+plt.tight_layout()
+plt.savefig("binary_roc_curve.png")
+plt.close()
+
+print(f"\nAUC-ROC Score: {roc_auc:.4f}")
+print("ROC curve saved as binary_roc_curve.png")

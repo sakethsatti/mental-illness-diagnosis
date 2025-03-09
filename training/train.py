@@ -16,6 +16,7 @@ parser.add_argument('--test_fraction', type=float, default=1.0, help='Fraction o
 parser.add_argument('--batch_size', type=int, default=128, help='Batch size for training')
 parser.add_argument('--epochs', type=int, default=5, help='Number of training epochs')
 parser.add_argument('--learning_rate', type=float, default=2e-5, help='Learning rate')
+parser.add_argument('--use_weighted_loss', action='store_true', help='Use weighted loss function based on class distribution')
 args = parser.parse_args()
 
 # Parameters
@@ -30,6 +31,7 @@ RS = 42
 TRAIN_FRACTION = args.train_fraction
 TEST_FRACTION = args.test_fraction
 LANGUAGE = "english"
+USE_WEIGHTED_LOSS = args.use_weighted_loss
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
@@ -122,20 +124,25 @@ class_weights = [(total_count / (num_classes * label_counts[i]))**CLASS_WEIGHT_E
 weights_tensor = torch.tensor(class_weights, dtype=torch.float32).to(device)
 
 class WeightedTrainer(Trainer):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, use_weighted_loss=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.weights_tensor = weights_tensor
+        self.use_weighted_loss = use_weighted_loss
+        print(f"Using {'weighted' if use_weighted_loss else 'standard'} loss function")
 
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         labels = inputs.pop("labels")
         outputs = model(**inputs)
         logits = outputs.logits
 
-        loss_fct = torch.nn.CrossEntropyLoss(weight=self.weights_tensor)
+        if self.use_weighted_loss:
+            loss_fct = torch.nn.CrossEntropyLoss(weight=self.weights_tensor)
+        else:
+            loss_fct = torch.nn.CrossEntropyLoss()
+            
         loss = loss_fct(logits.view(-1, self.model.config.num_labels), labels.view(-1))
 
         return (loss, outputs) if return_outputs else loss
-
 
 steps_per_epoch = len(tokenized_train) // (BATCH_SIZE)
 logging_steps = steps_per_epoch // 20
@@ -171,6 +178,7 @@ training_args = TrainingArguments(
 )
 
 trainer = WeightedTrainer(
+    use_weighted_loss=USE_WEIGHTED_LOSS,
     model=model,
     args=training_args,
     train_dataset=tokenized_train,
